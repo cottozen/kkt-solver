@@ -1,0 +1,10 @@
+[project]
+name = "kkt-solver"
+version = "0.0.1"
+description = "Implements an algorithm to solve contrained minimization problems"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "colorama>=0.4.6",
+    "sympy>=1.14.0",
+]
