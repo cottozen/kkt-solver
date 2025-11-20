@@ -1,4 +1,4 @@
-## 🚀 KKT Solver for Constrained Optimization
+## KKT Solver for Constrained Optimization
 
 This repository contains a Karush–Kuhn–Tucker (KKT) conditions-based solver designed for **analytical** non-linear optimization. It leverages the **SymPy** library to symbolically compute the gradients and solve the resulting system of KKT equations
 
@@ -9,15 +9,15 @@ subject to:
 $$\Large g_i(v) \le 0, \quad \text{for } i = 1, \dots, m$$
 $$\Large h_j(v) = 0, \quad \text{for } j = 1, \dots, p$$
 
-## ✨ Features
+## Features
 
-* **Hybrid Solving Capability** ⚙️: Performs an **Analytical/Symbolic** solve first. If that fails (e.g., due to transcendental equations), it automatically falls back to **Numerical Root Finding** if enabled via the `allow_numeric` flag.
+* **Hybrid Solving Capability**: Performs an **Analytical/Symbolic** solve first. If that fails (e.g., due to transcendental equations), it automatically falls back to **Numerical Root Finding** if enabled via the `allow_numeric` flag.
 * **Minimization & Maximization**: The solver handles both minimization and maximization goals.
   * **Minimization:** Solves the standard $\min f(\mathbf{v})$.
   * **Maximization:** Solves $\max f(\mathbf{v})$ by applying KKT conditions to the equivalent minimization problem: $\min -f(\mathbf{v})$.
-* **Solution Verification** ✅: Includes a separate `verify` function to confirm if any arbitrary point is a valid KKT critical point by checking for the existence of feasible Lagrange multipliers.
+* **Solution Verification**: Includes a separate `verify` function to confirm if any arbitrary point is a valid KKT critical point by checking for the existence of feasible Lagrange multipliers.
 
-## 🛠️ Installation
+## Installation
 
 This project uses **uv** for fast dependency management. Follow these three steps to get started.
 
@@ -39,7 +39,7 @@ Navigate to your cloned repository and run `uv sync`. This command **automatical
 uv sync
 ```
 
-## 💻 Usage
+## Usage
 
 The solver is implemented in the class `KKTSolver`. You must define your objective and constraint functions using **SymPy Expressions**.
 
@@ -91,7 +91,7 @@ The `solve()` method returns a list of `KKTSolution` objects, which are the poin
 
 -----
 
-## 🧠 Solver Logic & KKT Conditions
+## Solver Logic & KKT Conditions
 
 The solver works by transforming the constrained optimization problem into a system of non-linear algebraic equations based on the KKT necessary conditions.
 
@@ -107,7 +107,7 @@ The solver automatically constructs a system of equations $\large M = \mathbf{0}
 
 -----
 
-## 📜 License
+## License
 
 This project is licensed under the **MIT License**. See the **`LICENSE`** file in the root directory for the full terms and conditions.
 
