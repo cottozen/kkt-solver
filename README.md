@@ -1,20 +1,15 @@
-
 ## 🚀 KKT Solver for Constrained Optimization
 
 This repository contains a Karush–Kuhn–Tucker (KKT) conditions-based solver designed for **analytical** non-linear optimization. It leverages the **SymPy** library to symbolically compute the gradients and solve the resulting system of KKT equations
------
 
 ## ✨ Features
 
-* Solves optimization problems of the form:
-    $$\min_{x} f(x)$$
-    subject to:
-    $$g_i(x) \le 0, \quad \text{for } i = 1, \dots, m$$
-    $$h_j(x) = 0, \quad \text{for } j = 1, \dots, p$$
+Solves optimization problems of the form:
 
------
-
-Here is the **Prerequisites and Installation** section from the updated `README.md`, incorporating the use of the **`uv` package manager**.
+$$\Large \min_{v \in \mathbf{R}^n} f(v) $$
+subject to:
+$$\Large g_i(v) \le 0, \quad \text{for } i = 1, \dots, m$$
+$$\Large h_j(v) = 0, \quad \text{for } j = 1, \dots, p$$
 
 ## 🛠️ Installation
 
@@ -94,23 +89,15 @@ The `solve()` method returns a list of `KKTSolution` objects, which are the poin
 
 The solver works by transforming the constrained optimization problem into a system of non-linear algebraic equations based on the KKT necessary conditions.
 
-### 1\. KKT Equation Formulation
+### 1. KKT Equation Formulation
 
-The solver automatically constructs a system of equations $M = \mathbf{0}$:
+The solver automatically constructs a system of equations $\large M = \mathbf{0}$ using the following necessary conditions:
 
-| Condition | SymPy Expression Added to $M$ |
+| Condition | Mathematical Formulation |
 | :--- | :--- |
-| **Stationarity** | $\nabla f(\mathbf{x}) + \sum_{i} \lambda_i \nabla g_i(\mathbf{x}) + \sum_{j} \mu_j \nabla h_j(\mathbf{x}) = \mathbf{0}$ |
-| **Complementary Slackness** | $\lambda_i \cdot g_i(\mathbf{x}) = 0$ for all inequalities |
-| **Equality Feasibility** | $h_j(\mathbf{x}) = 0$ for all equalities |
-
-### 2\. Solving and Filtering
-
-1. **Symbolic Solve**: The function $\texttt{sympy.solve}(M, \text{all\_symbols})$ is used to find all mathematical solutions for $\mathbf{x}$, $\boldsymbol{\lambda}$, and $\boldsymbol{\mu}$.
-2. **Feasibility Check**: The solver then iterates through all results and checks the remaining KKT feasibility conditions:
-      * **Primal Feasibility (Inequality)**: $g_i(\mathbf{x}^*) \le 0$
-      * **Dual Feasibility**: $\lambda_i^* \ge 0$
-3. **Optimum Selection**: Finally, the valid solutions are filtered to select only those that yield the minimum value of $f(\mathbf{x})$.
+| **Stationarity** | $$\large \nabla f(\mathbf{x}) + \sum_{i} \lambda_i \nabla g_i(\mathbf{x}) + \sum_{j} \mu_j \nabla h_j(\mathbf{x}) = \mathbf{0}$$ |
+| **Complementary Slackness** | $$\large \lambda_i \cdot g_i(\mathbf{x}) = 0 \quad \text{for all inequalities}$$ |
+| **Equality Feasibility** | $$\large h_j(\mathbf{x}) = 0 \quad \text{for all equalities}$$ |
 
 -----
 
