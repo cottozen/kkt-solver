@@ -84,10 +84,10 @@ optimal_solutions = solver.solve(minimize=True)
 
 The `solve()` method returns a list of `KKTSolution` objects, which are the points satisfying all KKT conditions and resulting in the minimum objective value found. Each `KKTSolution` object contains:
 
-* **`vars`**: Dictionary of the optimal variable values ($\mathbf{x}^*$).
-* **`lambdas`**: Dictionary of Lagrange Multipliers for inequalities ($\boldsymbol{\lambda}^*$).
-* **`multipliers`**: Dictionary of Lagrange Multipliers for equalities ($\boldsymbol{\mu}^*$).
-* **`value`**: The optimal objective function value, $f(\mathbf{x}^*)$.
+* **`vars`**: Dictionary of the optimal variable values
+* **`lambdas`**: Dictionary of Lagrange Multipliers for inequalities
+* **`multipliers`**: Dictionary of Lagrange Multipliers for equalities
+* **`value`**: The optimal objective function value
 
 -----
 
