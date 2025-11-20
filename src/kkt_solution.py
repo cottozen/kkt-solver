@@ -50,6 +50,7 @@ class KKTSolution:
             colorama.Fore.GREEN
             + textwrap.dedent(f"""
             OPTIMAL SOLUTION FOUND:
+            value: {self.value},
             variables: {self.vars},
             lambdas: {self.lambdas} 
             """)
@@ -60,6 +61,7 @@ class KKTSolution:
             colorama.Fore.GREEN
             + textwrap.dedent(f"""
             SOLUTION FOUND:
+            value: {self.value},
             variables: {self.vars},
             lambdas: {self.lambdas} 
             """)
@@ -71,6 +73,7 @@ class KKTSolution:
             + textwrap.dedent(f"""
             FAILED INEQUALITY VERIFICATION:
             contraint: {error}
+            value: {self.value},
             variables: {self.vars},
             lambdas: {self.lambdas} 
             """)

@@ -1,3 +1,4 @@
+import colorama
 import sympy as sp
 import unittest
 import sys
@@ -32,6 +33,8 @@ class KKTSolverTests(unittest.TestCase):
         solver = KKTSolver(f, [x, y], [g_1, g_2, g_3, g_4])
         optimals = solver.solve()
         assert optimals == expected
+        for opt in optimals:
+            assert solver.verify(opt.vars)
 
     def testSolve2(self):
         x, y = sp.symbols("x, y")
@@ -53,6 +56,8 @@ class KKTSolverTests(unittest.TestCase):
         solver = KKTSolver(f, [x, y], [g_1, g_2, g_3, g_4])
         optimals = solver.solve()
         assert optimals == expected
+        for opt in optimals:
+            assert solver.verify(opt.vars)
 
     def testSolve3(self):
         x, y = sp.symbols("x, y")
@@ -76,6 +81,8 @@ class KKTSolverTests(unittest.TestCase):
         solver = KKTSolver(f, [x, y], [g_1, g_2, g_3])
         optimals = solver.solve()
         assert optimals == expected
+        for opt in optimals:
+            assert solver.verify(opt.vars)
 
     def testSolveWithEqualityContraint(self):
         x, y, z = sp.symbols("x, y, z")
@@ -103,6 +110,75 @@ class KKTSolverTests(unittest.TestCase):
         )
         optimals = solver.solve()
         assert optimals == expected
+        for opt in optimals:
+            assert solver.verify(opt.vars)
+
+    def testSolveNumeric(self):
+        x = sp.Symbol("x")
+        y = sp.Symbol("y")
+
+        f = x**2 + y**2
+        f_symbols = [x, y]
+        inequalities = [x + y - 1]
+        equalities = [x - sp.cos(y)]
+
+        expected = [
+            KKTSolution(
+                vars={"x": 1, "y": 0},
+                lambdas={"lam_1": 0},
+                value=1,
+            )
+        ]
+        solver = KKTSolver(
+            f=f,
+            f_symbols=f_symbols,
+            constraint_inequalities=inequalities,
+            constraint_equalities=equalities,
+        )
+        optimals = solver.solve()
+        assert optimals == expected
+        for opt in optimals:
+            assert solver.verify(opt.vars)
+
+    def testSolveNoNumeric(self):
+        x = sp.Symbol("x")
+        y = sp.Symbol("y")
+
+        f = x**2 + y**2
+        f_symbols = [x, y]
+        inequalities = [x + y - 1]
+        equalities = [x - sp.cos(y)]
+
+        solver = KKTSolver(
+            f=f,
+            f_symbols=f_symbols,
+            constraint_inequalities=inequalities,
+            constraint_equalities=equalities,
+            allow_numeric=False,
+        )
+        optimals = solver.solve()
+        assert len(optimals) == 0
+
+    def testSolveMaximize(self):
+        x, y = sp.symbols("x, y")
+        # ------------------
+        f = x + 3 * y**2
+        g_1 = x**2 + 2 * y**2 - 1
+        g_2 = x + y - 1
+        g_3 = y - x
+
+        expected = [
+            KKTSolution(
+                vars={"x": 1 / 3, "y": -2 / 3},
+                lambdas={"lam_1": 3 / 2, "lam_2": 0, "lam_3": 0},
+                value=5 / 3,
+            )
+        ]
+        solver = KKTSolver(f, [x, y], [g_1, g_2, g_3], allow_numeric=False)
+        optimals = solver.solve(minimize=False)
+        assert optimals == expected, f"got: {optimals}"
+        for opt in optimals:
+            assert solver.verify(opt.vars, minimize=False)
 
 
 if __name__ == "__main__":

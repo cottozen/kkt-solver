@@ -15,3 +15,11 @@ def compare_dict_var(d1: dict[str, sp.Expr | float], d2: dict[str, sp.Expr | flo
             print(f"found none maching var: {sym_name} -> {v} != {v2} ")
             return False
     return True
+
+
+def compute_grad(f: sp.Expr, f_symbols: list[sp.Symbol]):
+    partials = []
+    for s in f_symbols:
+        partials.append(sp.diff(f, s))
+    grad = sp.Matrix(partials)
+    return grad

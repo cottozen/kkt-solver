@@ -2,14 +2,20 @@
 
 This repository contains a Karush–Kuhn–Tucker (KKT) conditions-based solver designed for **analytical** non-linear optimization. It leverages the **SymPy** library to symbolically compute the gradients and solve the resulting system of KKT equations
 
-## ✨ Features
-
 Solves optimization problems of the form:
 
 $$\Large \min_{v \in \mathbf{R}^n} f(v) $$
 subject to:
 $$\Large g_i(v) \le 0, \quad \text{for } i = 1, \dots, m$$
 $$\Large h_j(v) = 0, \quad \text{for } j = 1, \dots, p$$
+
+## ✨ Features
+
+* **Hybrid Solving Capability** ⚙️: Performs an **Analytical/Symbolic** solve first. If that fails (e.g., due to transcendental equations), it automatically falls back to **Numerical Root Finding** if enabled via the `allow_numeric` flag.
+* **Minimization & Maximization**: The solver handles both minimization and maximization goals.
+  * **Minimization:** Solves the standard $\min f(\mathbf{v})$.
+  * **Maximization:** Solves $\max f(\mathbf{v})$ by applying KKT conditions to the equivalent minimization problem: $\min -f(\mathbf{v})$.
+* **Solution Verification** ✅: Includes a separate `verify` function to confirm if any arbitrary point is a valid KKT critical point by checking for the existence of feasible Lagrange multipliers.
 
 ## 🛠️ Installation
 
@@ -46,35 +52,35 @@ from sympy import Symbol, cos
 from src.kkt_solver import KKTSolver
 
 # 1. Define the Symbols (Variables)
-x1 = Symbol('x1')
-x2 = Symbol('x2')
-f_symbols = [x1, x2]
+x = Symbol('x')
+y = Symbol('y')
+f_symbols = [x, y]
 
-# 2. Define the Objective Function (f(x))
-# Example: Minimize f(x) = x1^2 + x2^2
-f = x1**2 + x2**2
+# 2. Define the Objective Function (f(v))
+# Example: Minimize f(x) = x^2 + y^2
+f = x**2 + y**2
 
-# 3. Define the Constraints (g(x) <= 0 and h(x) = 0)
-# Inequality constraint g1(x) <= 0: x1 + x2 - 1 <= 0 (where g1 = x1 + x2 - 1)
-inequalities = [x1 + x2 - 1]
+# 3. Define the Constraints (g(v) <= 0 and h(v) = 0)
+g_1 = x1 + x2 - 1
 
-# Equality constraint h1(x) = 0: x1 - cos(x2) = 0 (where h1 = x1 - cos(x2))
-equalities = [x1 - cos(x2)] 
+# cos will require allow_numeric
+h_1 = x - cos(y)
 
 # 4. Initialize and Solve
 solver = KKTSolver(
     f=f,
     f_symbols=f_symbols,
-    constraint_inequalities=inequalities,
-    constraint_equalities=equalities,
+    constraint_inequalities=[g_1],
+    constraint_equalities=[h_1],
+    allow_numeric=True,
     verbose=True
 )
 
-optimal_solutions = solver.solve()
+optimal_solutions = solver.solve(minimize=True)
 # ... Output processing ...
 ```
 
-### Output Format
+### Output
 
 The `solve()` method returns a list of `KKTSolution` objects, which are the points satisfying all KKT conditions and resulting in the minimum objective value found. Each `KKTSolution` object contains:
 
