@@ -39,6 +39,12 @@ Navigate to your cloned repository and run `uv sync`. This command **automatical
 uv sync
 ```
 
+To install the package
+
+```bash
+uv pip install .
+```
+
 ## Usage
 
 The solver is implemented in the class `KKTSolver`. You must define your objective and constraint functions using **SymPy Expressions**.
@@ -49,7 +55,7 @@ The primary method for solving the problem is `KKTSolver().solve()`.
 
 ```python
 from sympy import Symbol, cos
-from src.kkt_solver import KKTSolver
+from kkt_solver import KKTSolver
 
 # 1. Define the Symbols (Variables)
 x = Symbol('x')
@@ -61,7 +67,7 @@ f_symbols = [x, y]
 f = x**2 + y**2
 
 # 3. Define the Constraints (g(v) <= 0 and h(v) = 0)
-g_1 = x1 + x2 - 1
+g_1 = x + y - 1
 
 # cos will require allow_numeric
 h_1 = x - cos(y)
