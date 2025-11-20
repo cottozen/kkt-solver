@@ -23,28 +23,6 @@ class KKTSolution:
             and utils.compare_dict_var(self.lambdas, value.lambdas)
         )
 
-    def verify_constraints(
-        self,
-        constraint_inequalities: list[sp.Expr],
-        constraint_equalities: list[sp.Expr],
-        bound: float = 0,
-    ):
-        # verify g_i constraints
-        for g_i in constraint_inequalities:
-            g_v = g_i.subs(self.vars)  # pyright: ignore
-            if g_v > bound:
-                return False, f"failed inequality  constraint: {g_i} with value: {g_v}"
-        for g_i in constraint_equalities:
-            g_v = g_i.subs(self.vars)  # pyright: ignore
-            if g_v != bound:
-                return False, f"failed equalitiy constraint: {g_i} with value: {g_v}"
-        # verify lambda >= 0
-        for l_i, v in self.lambdas.items():
-            # lambda for equalities dont have to be greater than 0
-            if v < 0:
-                return False, f"failed lambda constraint: {l_i}"
-        return True, "VERIFIED"
-
     def display_optimal_solution(self):
         print(
             colorama.Fore.GREEN
