@@ -2,7 +2,7 @@ import sympy as sp
 from dataclasses import dataclass, field
 import colorama
 import textwrap
-from src import utils
+from kkt_solver import utils
 
 
 @dataclass

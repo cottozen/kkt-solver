@@ -1,13 +1,12 @@
-import colorama
 import sympy as sp
 import unittest
 import sys
 import os
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(current_dir, ".."))
+sys.path.append(os.path.join(current_dir, "..", "src"))
 
-from src.kkt_solver import KKTSolver, KKTSolution
+from kkt_solver import KKTSolver, KKTSolution
 
 
 class KKTSolverTests(unittest.TestCase):

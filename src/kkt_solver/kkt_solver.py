@@ -2,8 +2,8 @@ from typing import Any
 import sympy as sp
 import numpy as np
 import colorama
-from src.kkt_solution import KKTSolution
-from src.utils import compute_grad
+from kkt_solver.kkt_solution import KKTSolution
+from kkt_solver.utils import compute_grad
 
 
 class KKTSolver:
