@@ -10,6 +10,7 @@ import enum
 class StationaryPointType(enum.Enum):
     BOUNDARY_EXTREMUM = enum.auto()
     GLOBAL_MINIMUM = enum.auto()
+    GLOBAL_MAXIMUM = enum.auto()
     LOCAL_MINIMUM = enum.auto()
     LOCAL_MAXIMUM = enum.auto()
     SADDLE_POINT = enum.auto()
@@ -23,6 +24,7 @@ class KKTSolver:
         f_symbols: list[sp.Symbol],
         constraint_inequalities: list[sp.Expr] | None = None,
         constraint_equalities: list[sp.Expr] | None = None,
+        minimize: bool = True,
         allow_numeric: bool = True,
         verbose: bool = True,
     ) -> None:
@@ -45,6 +47,10 @@ class KKTSolver:
         constraint_equalities : list of sympy.Expr, optional
             A list of equality constraint expressions, h_j(v), where the problem
             is subject to h_j(v) = 0. Default is None (no equality constraints).
+        minimize: bool, optional
+            Determines the goal of the optimization.
+            - If True (default): optimizes min f(v)
+            - If False: optimizes min -f(v)
         allow_numeric : bool, optional
             If True (default), the solver will attempt to use a numerical
             root finder if the primary analytical solver fails. If False, only analytical
@@ -52,6 +58,7 @@ class KKTSolver:
         verbose : bool, optional
 
         """
+        self.minimize = minimize
         self.allow_numeric = allow_numeric
         self.verbose = verbose
         self.f = f
@@ -110,13 +117,13 @@ class KKTSolver:
             results = sp.nsolve(M.tolist(), symbols, v0, dict=True)
             return results
 
-    def _define_equations(self, minimize: bool):
+    def _define_equations(self):
         f_grad = compute_grad(self.f, self.f_symbols)
 
         # contruct L(v) = 0
         L = f_grad
         # if objective is minimization we optimize f(v) otherwise we optimize -f(v)
-        if not minimize:
+        if not self.minimize:
             L = -L
 
         equations = []
@@ -168,10 +175,9 @@ class KKTSolver:
         return True, "VERIFIED"
 
     def has_active_constraints(self, sol: KKTSolution):
-        TOLERANCE = 1e-9
         for g_i in self.constraint_inequalities:
             g_v = g_i.subs(sol.vars)  # pyright: ignore
-            if abs(g_v) < TOLERANCE:
+            if g_v == 0:
                 return True
         if len(self.constraint_equalities) > 0:
             return True
@@ -180,20 +186,48 @@ class KKTSolver:
     def is_convex_problem(self):
         """
         Checks if hessian is positive semi-definite and inequality constraint functions are convex
-        if we have equalitiy constraints we jusr return false,
-        since we dont have an easy check to know if we have a convex subset
+        for the equalitiy constraints h(v) = 0 we need to check that they are affine
+        meaning that h can be written as: h(v) = A.T * v + b
+        We check that h is affine by checkking if the hessian of h is the zero matrix.
         """
-        if len(self.constraint_equalities):
-            # in reality this is 'unknown'
-            return False
 
-        is_convex_subset = all(
+        n = len(self.f_symbols)
+        zero_matrix = sp.zeros(n, n)
+        eq_is_convex_subset = all(
+            [
+                # compare to  zero matrix
+                sp.hessian(g_i, self.f_symbols).equals(zero_matrix)
+                for g_i in self.constraint_equalities
+            ]
+        )
+        for g_i in self.constraint_equalities:
+            print(
+                "h_i hessian: ",
+                sp.hessian(g_i, self.f_symbols),
+                sp.hessian(g_i, self.f_symbols).is_zero,
+            )
+
+        inq_is_convex_subset = all(
             [
                 sp.hessian(g_i, self.f_symbols).is_positive_semidefinite
                 for g_i in self.constraint_inequalities
             ]
         )
-        return self.f_hessian.is_positive_semidefinite and is_convex_subset
+        if not eq_is_convex_subset:
+            print("not convex subset with equalities")
+        if not inq_is_convex_subset:
+            print("not convex subset with in-equalities")
+
+        if not self.f_hessian.is_positive_semidefinite:
+            print("not convex function")
+
+        # we have a convex function f: C -> R where C is a convex subset
+        # then we have a convex optimization problem
+        return (
+            self.f_hessian.is_positive_semidefinite
+            and eq_is_convex_subset
+            and inq_is_convex_subset
+        )
 
     def get_point_type(self, sol: KKTSolution):
         """
@@ -203,7 +237,9 @@ class KKTSolver:
         v: sp.Matrix = self.f_hessian.subs(sol.vars)
 
         if self.is_convex_problem():
-            return StationaryPointType.GLOBAL_MINIMUM
+            if self.minimize:
+                return StationaryPointType.GLOBAL_MINIMUM
+            return StationaryPointType.GLOBAL_MAXIMUM
         if self.has_active_constraints(sol):
             return StationaryPointType.BOUNDARY_EXTREMUM
         if v.is_positive_definite:
@@ -214,7 +250,7 @@ class KKTSolver:
             return StationaryPointType.SADDLE_POINT
         return StationaryPointType.CRITICAL_POINT
 
-    def verify(self, values: dict[str, sp.Expr | float], minimize: bool = True):
+    def verify(self, values: dict[str, sp.Expr | float]):
         """
         Verifies if values is a valid optomal for the optimization problem
 
@@ -222,14 +258,10 @@ class KKTSolver:
         ----------
         values:  dict[str, sp.Expr | float]
             values of the proposed solution
-        minimize: bool, optional
-            Determines the goal of the optimization.
-            - If True (default): optimizes min f(v)
-            - If False(default): optimizes min -f(v)
         Returns
         True if values is a valid solution to the optimization problem based on the KKT conditions
         """
-        M = self._define_equations(minimize)
+        M = self._define_equations()
         results = self._solve_equations(M.subs(values), self.multipliers + self.lambdas)
         for potential_sol in results:
             sol = KKTSolution(
@@ -247,17 +279,12 @@ class KKTSolver:
                 return False
         return True
 
-    def solve(self, minimize: bool = True):
+    def solve(self):
         """
         Solves the constrained optimization problem by finding all points that
         satisfy the KKT conditions.
 
-        Parameters
         ----------
-        minimize : bool, optional
-            Determines the goal of the optimization.
-            - If True (default): optimizes min f(v)
-            - If False(default): optimizes min -f(v)
         Returns
         -------
         list of KKTSolution
@@ -272,7 +299,7 @@ class KKTSolver:
             print(f"EQUALITY CONSTRAINTS: {self.constraint_equalities}")
 
         # define matrix of equations to solve
-        M = self._define_equations(minimize)
+        M = self._define_equations()
 
         min_v = float("inf")
         max_v = float("-inf")
@@ -306,6 +333,6 @@ class KKTSolver:
                 max_v = v
 
         # select min or max depending on optimization objective
-        optimal_value = min_v if minimize else max_v
+        optimal_value = min_v if self.minimize else max_v
         optimals: list[KKTSolution] = self._filter_for_optimum(optimal_value, solutions)
         return optimals

@@ -53,37 +53,39 @@ The solver is implemented in the class `KKTSolver`. You must define your objecti
 
 The primary method for solving the problem is `KKTSolver().solve()`.
 
+As an example we have a convex optimization problem
+
 ```python
 from sympy import Symbol, cos
 from kkt_solver import KKTSolver
 
 # 1. Define the Symbols (Variables)
-x = Symbol('x')
-y = Symbol('y')
-f_symbols = [x, y]
+x, y, z = sp.symbols("x, y, z")
+f = 2 * x**2 + y**2 + 3 * z**2
+# inequalities contraints
+g_1 = 2 - x
+g_2 = y + z - x
+g_3 = -y
+g_4 = -z
+# equalities contraints
+g_5 = x + z + y - 10
 
-# 2. Define the Objective Function (f(v))
-# Example: Minimize f(x) = x^2 + y^2
-f = x**2 + y**2
-
-# 3. Define the Constraints (g(v) <= 0 and h(v) = 0)
-g_1 = x + y - 1
-
-# cos will require allow_numeric
-h_1 = x - cos(y)
-
-# 4. Initialize and Solve
 solver = KKTSolver(
-    f=f,
-    f_symbols=f_symbols,
-    constraint_inequalities=[g_1],
-    constraint_equalities=[h_1],
+    f,
+    [x, y, z],
+    constraint_inequalities=[g_1, g_2, g_3, g_4],
+    constraint_equalities=[g_5],
+    minimize=True,
     allow_numeric=True,
     verbose=True
 )
-
-optimal_solutions = solver.solve(minimize=True)
+optimal_solutions = solver.solve()
 # ... Output processing ...
+for opt in optimals:
+    assert solver.verify(opt.vars)
+    assert StationaryPointType.GLOBAL_MINIMUM == solver.get_point_type(opt), (
+        f"got: {solver.get_point_type(opt)}"
+    )
 ```
 
 ### Output
