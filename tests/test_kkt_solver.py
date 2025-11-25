@@ -3,7 +3,7 @@ import unittest
 import sys
 import os
 
-from kkt_solver.kkt_solver import StationaryPointType
+from kkt_solver.kkt_solver import PointType
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(current_dir, "..", "src"))
@@ -37,7 +37,7 @@ class KKTSolverTests(unittest.TestCase):
         for opt in optimals:
             assert solver.verify(opt.vars)
             # convex optimzation problem
-            assert StationaryPointType.GLOBAL_MINIMUM == solver.get_point_type(opt), (
+            assert PointType.GLOBAL_MINIMUM == solver.get_point_type(opt), (
                 f"got: {solver.get_point_type(opt)}"
             )
 
@@ -64,7 +64,7 @@ class KKTSolverTests(unittest.TestCase):
         for opt in optimals:
             assert solver.verify(opt.vars)
             # convex optimzation problem
-            assert StationaryPointType.GLOBAL_MINIMUM == solver.get_point_type(opt), (
+            assert PointType.GLOBAL_MINIMUM == solver.get_point_type(opt), (
                 f"got: {solver.get_point_type(opt)}"
             )
 
@@ -93,7 +93,7 @@ class KKTSolverTests(unittest.TestCase):
         for opt in optimals:
             assert solver.verify(opt.vars)
             # convex optimzation problem
-            assert StationaryPointType.GLOBAL_MINIMUM == solver.get_point_type(opt), (
+            assert PointType.GLOBAL_MINIMUM == solver.get_point_type(opt), (
                 f"got: {solver.get_point_type(opt)}"
             )
 
@@ -125,7 +125,7 @@ class KKTSolverTests(unittest.TestCase):
         assert optimals == expected
         for opt in optimals:
             assert solver.verify(opt.vars)
-            assert StationaryPointType.GLOBAL_MINIMUM == solver.get_point_type(opt), (
+            assert PointType.GLOBAL_MINIMUM == solver.get_point_type(opt), (
                 f"got: {solver.get_point_type(opt)}"
             )
 
@@ -156,9 +156,9 @@ class KKTSolverTests(unittest.TestCase):
         for opt in optimals:
             assert solver.verify(opt.vars)
             # convex optimzation
-            assert StationaryPointType.BOUNDARY_EXTREMUM == solver.get_point_type(
-                opt
-            ), f"got: {solver.get_point_type(opt)}"
+            assert PointType.BOUNDARY_EXTREMUM == solver.get_point_type(opt), (
+                f"got: {solver.get_point_type(opt)}"
+            )
 
     def testSolveNoNumeric(self):
         x = sp.Symbol("x")
@@ -202,7 +202,7 @@ class KKTSolverTests(unittest.TestCase):
         for opt in optimals:
             assert solver.verify(opt.vars)
             # convex optimzation problem
-            assert StationaryPointType.GLOBAL_MAXIMUM == solver.get_point_type(opt), (
+            assert PointType.GLOBAL_MAXIMUM == solver.get_point_type(opt), (
                 f"got: {solver.get_point_type(opt)}"
             )
 

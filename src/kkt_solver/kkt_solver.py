@@ -7,7 +7,7 @@ from kkt_solver.utils import compute_grad
 import enum
 
 
-class StationaryPointType(enum.Enum):
+class PointType(enum.Enum):
     BOUNDARY_EXTREMUM = enum.auto()
     GLOBAL_MINIMUM = enum.auto()
     GLOBAL_MAXIMUM = enum.auto()
@@ -183,16 +183,16 @@ class KKTSolver:
             return True
         return False
 
-    def is_convex_problem(self):
-        """
-        Checks if hessian is positive semi-definite and inequality constraint functions are convex
-        for the equalitiy constraints h(v) = 0 we need to check that they are affine
-        meaning that h can be written as: h(v) = A.T * v + b
-        We check that h is affine by checkking if the hessian of h is the zero matrix.
-        """
+    def is_convex_function(self) -> bool:
+        return self.f_hessian.is_positive_semidefinite is True
 
+    def is_convex_subset(self) -> bool:
         n = len(self.f_symbols)
         zero_matrix = sp.zeros(n, n)
+
+        # for the equalitiy constraints h(v) = 0 we need to check that they are affine
+        # meaning that h can be written as: h(v) = A.T * v + b
+        # We check that h is affine by checkking if the hessian of h is the zero matrix.
         eq_is_convex_subset = all(
             [
                 # compare to  zero matrix
@@ -207,27 +207,22 @@ class KKTSolver:
                 sp.hessian(g_i, self.f_symbols).is_zero,
             )
 
+        # for the inequality we use the fact that g(v) <= a is a convex subset if g is convex,
+        # so we check that all inequality constraints are convex and then the union will be convex
         inq_is_convex_subset = all(
             [
                 sp.hessian(g_i, self.f_symbols).is_positive_semidefinite
                 for g_i in self.constraint_inequalities
             ]
         )
-        if not eq_is_convex_subset:
-            print("not convex subset with equalities")
-        if not inq_is_convex_subset:
-            print("not convex subset with in-equalities")
+        # if both subsets are convex then the unions is convex
+        return eq_is_convex_subset and inq_is_convex_subset
 
-        if not self.f_hessian.is_positive_semidefinite:
-            print("not convex function")
-
-        # we have a convex function f: C -> R where C is a convex subset
-        # then we have a convex optimization problem
-        return (
-            self.f_hessian.is_positive_semidefinite
-            and eq_is_convex_subset
-            and inq_is_convex_subset
-        )
+    def is_convex_problem(self):
+        """
+        Checks if the function is convex and that the subset we are optimizing over is convex
+        """
+        return self.is_convex_subset() and self.is_convex_function()
 
     def get_point_type(self, sol: KKTSolution):
         """
@@ -238,17 +233,17 @@ class KKTSolver:
 
         if self.is_convex_problem():
             if self.minimize:
-                return StationaryPointType.GLOBAL_MINIMUM
-            return StationaryPointType.GLOBAL_MAXIMUM
+                return PointType.GLOBAL_MINIMUM
+            return PointType.GLOBAL_MAXIMUM
         if self.has_active_constraints(sol):
-            return StationaryPointType.BOUNDARY_EXTREMUM
+            return PointType.BOUNDARY_EXTREMUM
         if v.is_positive_definite:
-            return StationaryPointType.LOCAL_MINIMUM
+            return PointType.LOCAL_MINIMUM
         if v.is_negative_definite:
-            return StationaryPointType.LOCAL_MAXIMUM
+            return PointType.LOCAL_MAXIMUM
         if v.is_indefinite:
-            return StationaryPointType.SADDLE_POINT
-        return StationaryPointType.CRITICAL_POINT
+            return PointType.SADDLE_POINT
+        return PointType.CRITICAL_POINT
 
     def verify(self, values: dict[str, sp.Expr | float]):
         """
