@@ -1,3 +1,5 @@
+from decimal import InvalidOperation
+from operator import mul
 from typing import Any
 import sympy as sp
 import numpy as np
@@ -87,15 +89,33 @@ class KKTSolver:
     def _extract_symbol_values(self, potential_sol: dict[sp.Symbol, Any]):
         """
         extract function variables, lambdas and multipliers
-        from a potential solution returned by solver
+        from a potential solution returned by solver.
+        Handles missing keys (free variables) by setting them to 0.
         """
-        sol_vars: dict = {
-            f_symbol.name: potential_sol[f_symbol] for f_symbol in self.f_symbols
+
+        substitution_map: dict = {
+            sym: 0 for sym in self.all_symbols if sym not in potential_sol
         }
-        sol_lams: dict = {lam_i.name: potential_sol[lam_i] for lam_i in self.lambdas}
-        sol_muls: dict = {
-            mul_i.name: potential_sol[mul_i] for mul_i in self.multipliers
+
+        def resolve_expr_or_value(sym):
+            if sym in potential_sol:
+                val = potential_sol[sym]
+                # If the value is an expression substitute the free vars
+                return val.subs(substitution_map) if isinstance(val, sp.Expr) else val
+            else:
+                return substitution_map[sym]
+
+        sol_vars = {
+            f_symbol.name: resolve_expr_or_value(f_symbol)
+            for f_symbol in self.f_symbols
         }
+
+        sol_lams = {lam_i.name: resolve_expr_or_value(lam_i) for lam_i in self.lambdas}
+
+        sol_muls = {
+            mul_i.name: resolve_expr_or_value(mul_i) for mul_i in self.multipliers
+        }
+
         return sol_vars, sol_lams, sol_muls
 
     def _solve_equations(self, M: sp.Matrix, symbols: list[sp.Symbol]):
@@ -200,12 +220,6 @@ class KKTSolver:
                 for g_i in self.constraint_equalities
             ]
         )
-        for g_i in self.constraint_equalities:
-            print(
-                "h_i hessian: ",
-                sp.hessian(g_i, self.f_symbols),
-                sp.hessian(g_i, self.f_symbols).is_zero,
-            )
 
         # for the inequality we use the fact that g(v) <= a is a convex subset if g is convex,
         # so we check that all inequality constraints are convex and then the union will be convex

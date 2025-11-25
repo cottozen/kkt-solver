@@ -3,12 +3,12 @@ import unittest
 import sys
 import os
 
-from kkt_solver.kkt_solver import PointType
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(current_dir, "..", "src"))
 
 from kkt_solver import KKTSolver, KKTSolution
+from kkt_solver.kkt_solver import PointType
 
 
 class KKTSolverTests(unittest.TestCase):
@@ -205,6 +205,49 @@ class KKTSolverTests(unittest.TestCase):
             assert PointType.GLOBAL_MAXIMUM == solver.get_point_type(opt), (
                 f"got: {solver.get_point_type(opt)}"
             )
+
+    def testNoneUniqueLambas(self):
+        x = sp.Symbol("x")
+        y = sp.Symbol("y")
+        z = sp.Symbol("z")
+        f_symbols = [x, y, z]
+
+        f = x**2 + y**2 + (z - 1) ** 2
+
+        # Define the Constraints (g(v) <= 0 and h(v) = 0)
+        g_1 = z - x
+        g_2 = z + x
+        g_3 = z - y
+        g_4 = z + y
+        g_5 = -1 - z
+
+        expected = [
+            KKTSolution(
+                value=1,
+                vars={"x": 0, "y": 0, "z": 0},
+                lambdas={"lam_1": 1, "lam_2": 1, "lam_3": 0, "lam_4": 0, "lam_5": 0},
+                multipliers={},
+            ),
+            KKTSolution(
+                value=1,
+                vars={"x": 0, "y": 0, "z": 0},
+                lambdas={"lam_1": 0, "lam_2": 0, "lam_3": 1, "lam_4": 1, "lam_5": 0},
+                multipliers={},
+            ),
+        ]
+
+        solver = KKTSolver(
+            f=f,
+            f_symbols=f_symbols,
+            constraint_inequalities=[g_1, g_2, g_3, g_4, g_5],
+            constraint_equalities=[],
+            allow_numeric=True,
+            verbose=True,
+            minimize=True,
+        )
+
+        optimals = solver.solve()
+        assert optimals == expected
 
 
 if __name__ == "__main__":
