@@ -18,8 +18,5 @@ def compare_dict_var(d1: dict[str, sp.Expr | float], d2: dict[str, sp.Expr | flo
 
 
 def compute_grad(f: sp.Expr, f_symbols: list[sp.Symbol]):
-    partials = []
-    for s in f_symbols:
-        partials.append(sp.diff(f, s))
-    grad = sp.Matrix(partials)
+    grad = sp.Matrix([sp.diff(f, var) for var in f_symbols])
     return grad

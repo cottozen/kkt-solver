@@ -5,12 +5,20 @@ import textwrap
 from kkt_solver import utils
 
 
-@dataclass
+@dataclass(frozen=True)
 class KKTSolution:
     value: sp.Expr | float
     vars: dict[str, sp.Expr | float] = field(default_factory=dict)
     lambdas: dict[str, sp.Expr | float] = field(default_factory=dict)
     multipliers: dict[str, sp.Expr | float] = field(default_factory=dict)
+
+    def __hash__(self):
+        items = [
+            *sorted(self.vars.items()),
+            *sorted(self.lambdas.items()),
+            *sorted(self.multipliers.items()),
+        ]
+        return hash(tuple(items))
 
     # equality override for checking solutions
     def __eq__(self, value: object) -> bool:

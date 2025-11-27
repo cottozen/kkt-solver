@@ -1,5 +1,4 @@
-from decimal import InvalidOperation
-from operator import mul
+import itertools
 from typing import Any
 import sympy as sp
 import numpy as np
@@ -81,7 +80,7 @@ class KKTSolver:
         # define lagrangian multipliers for equalities
         self.multipliers: list[sp.Symbol] = [
             sp.Symbol(f"mul_{i + 1}")
-            for i, g_i in enumerate(self.constraint_equalities)
+            for i, h_i in enumerate(self.constraint_equalities)
         ]
 
         self.all_symbols = [*self.f_symbols, *self.lambdas, *self.multipliers]
@@ -90,7 +89,7 @@ class KKTSolver:
         """
         extract function variables, lambdas and multipliers
         from a potential solution returned by solver.
-        Handles missing keys (free variables) by setting them to 0.
+        Handles missing keys by setting them to 0.
         """
 
         substitution_map: dict = {
@@ -101,7 +100,7 @@ class KKTSolver:
             if sym in potential_sol:
                 val = potential_sol[sym]
                 # If the value is an expression substitute the free vars
-                return val.subs(substitution_map) if isinstance(val, sp.Expr) else val
+                return val.subs(substitution_map) if hasattr(val, "subs") else val
             else:
                 return substitution_map[sym]
 
@@ -118,7 +117,41 @@ class KKTSolver:
 
         return sol_vars, sol_lams, sol_muls
 
-    def _solve_equations(self, M: sp.Matrix, symbols: list[sp.Symbol]):
+    def _define_lagrangian(self):
+        # if objective is minimization we optimize f(v) otherwise we optimize -f(v)
+        L = self.f if self.minimize else -self.f
+        if len(self.constraint_equalities) or len(self.constraint_inequalities):
+            for lam_i, g_i in zip(self.lambdas, self.constraint_inequalities):
+                L += lam_i * g_i
+            for mul_i, h_i in zip(self.multipliers, self.constraint_equalities):
+                L += mul_i * h_i
+        return L
+
+    def _define_lagrangian_grad(self):
+        L = self._define_lagrangian()
+        L_grad = compute_grad(L, self.f_symbols)
+        return L_grad
+
+    def _define_equations(self):
+        """
+        Construct a Matrix of equations
+        """
+        equations = []
+        L_grad = self._define_lagrangian_grad()
+        equations.append(L_grad)
+
+        # add complementary slackness equations for inequalities
+        equations += [
+            lam_i * g_i
+            for lam_i, g_i in zip(self.lambdas, self.constraint_inequalities)
+        ]
+        # add equality contraint equations:
+        equations += self.constraint_equalities
+        M = sp.Matrix(equations)
+        return M
+
+    def _solve_matrix(self, M: sp.Matrix):
+        symbols = list(M.free_symbols)
         try:
             # Attempt the analytical solve
             results = sp.solve(M, symbols, dict=True)
@@ -133,60 +166,60 @@ class KKTSolver:
 
             print(colorama.Fore.WHITE + "Trying numeric root finding (Newton method)!")
             v0 = np.zeros(len(symbols))
-            # try numeric solve
+            # try numeric solve -> there are definetly better numeric methods than sympy.nsolve :)
             results = sp.nsolve(M.tolist(), symbols, v0, dict=True)
             return results
 
-    def _define_equations(self):
-        f_grad = compute_grad(self.f, self.f_symbols)
+    def _solve_equations_iter(self):
+        """
+        Solves equations iteratively by checking all combinations of lambdas
+        """
+        L_grad = self._define_lagrangian_grad()
+        combinations = itertools.product(*[(0, lam) for lam in self.lambdas])
+        results = []
+        for c in combinations:
+            equations = []
+            inactive_lambas = {}
 
-        # contruct L(v) = 0
-        L = f_grad
-        # if objective is minimization we optimize f(v) otherwise we optimize -f(v)
-        if not self.minimize:
-            L = -L
+            # add equalitiy constraints
+            equations += self.constraint_equalities
+            for i, active in enumerate(c):
+                # add complementary slackness equations for active constraints
+                if active != 0:
+                    equations.append(self.constraint_inequalities[i])
+                else:
+                    inactive_lambas[self.lambdas[i]] = 0
 
-        equations = []
-
-        if len(self.constraint_equalities) or len(self.constraint_inequalities):
-            for lam_i, g_i in zip(self.lambdas, self.constraint_inequalities):
-                L += lam_i * compute_grad(g_i, self.f_symbols)
-            for mul_i, g_i in zip(self.multipliers, self.constraint_equalities):
-                L += mul_i * compute_grad(g_i, self.f_symbols)
-            equations.append(L)
-
-        # add complementary slackness equations for inequalities
-        for lam_i, g_i in zip(self.lambdas, self.constraint_inequalities):
-            equations.append(lam_i * g_i)
-
-        # add equality contraint equations:
-        for g_i in zip(self.constraint_equalities):
-            equations.append(g_i)
-        M = sp.Matrix(equations)
-        return M
+            L_c = L_grad.subs(inactive_lambas)
+            equations.append(L_c)
+            M = sp.Matrix(equations)
+            results += self._solve_matrix(M)
+        return results
 
     def _filter_for_optimum(
         self, optimal_value: sp.Expr | float, solutions: list[KKTSolution]
     ):
+        hash_set = set()
         optimals: list[KKTSolution] = []
         # return optimals
         for sol in solutions:
-            if sol.value == optimal_value:
+            h_key = hash(sol)
+            if sol.value == optimal_value and h_key not in hash_set:
                 sol.display_optimal_solution()
                 optimals.append(sol)
+                hash_set.add(h_key)
         return optimals
 
     def verify_constraints(self, sol: KKTSolution):
-        bound = 0
         # verify g_i constraints
         for g_i in self.constraint_inequalities:
             g_v = g_i.subs(sol.vars)  # pyright: ignore
-            if g_v > bound:
+            if g_v > 0:
                 return False, f"failed inequality  constraint: {g_i} with value: {g_v}"
-        for g_i in self.constraint_equalities:
-            g_v = g_i.subs(sol.vars)  # pyright: ignore
-            if g_v != bound:
-                return False, f"failed equalitiy constraint: {g_i} with value: {g_v}"
+        for h_i in self.constraint_equalities:
+            h_v = h_i.subs(sol.vars)  # pyright: ignore
+            if h_v != 0:
+                return False, f"failed equalitiy constraint: {h_i} with value: {h_v}"
         # verify lambda >= 0
         for l_i, v in sol.lambdas.items():
             # lambda for equalities dont have to be greater than 0
@@ -195,12 +228,13 @@ class KKTSolver:
         return True, "VERIFIED"
 
     def has_active_constraints(self, sol: KKTSolution):
+        # if we have equalitiy contraints then we have active contraints
+        if len(self.constraint_equalities) > 0:
+            return True
         for g_i in self.constraint_inequalities:
             g_v = g_i.subs(sol.vars)  # pyright: ignore
             if g_v == 0:
                 return True
-        if len(self.constraint_equalities) > 0:
-            return True
         return False
 
     def is_convex_function(self) -> bool:
@@ -240,22 +274,26 @@ class KKTSolver:
 
     def get_point_type(self, sol: KKTSolution):
         """
-        Determines the critical point type for the provided solution
+        Determines the point type for the provided solution
         """
-
-        v: sp.Matrix = self.f_hessian.subs(sol.vars)
+        assert self.verify(sol.vars), "Invalid solution, cannot get point type."
 
         if self.is_convex_problem():
             if self.minimize:
                 return PointType.GLOBAL_MINIMUM
             return PointType.GLOBAL_MAXIMUM
+
+        L = self._define_lagrangian()
+        L_hessian = sp.hessian(L, self.f_symbols)
+        L_hessian_v = L_hessian.subs({**sol.vars, **sol.lambdas, **sol.multipliers})
+
+        if L_hessian_v.is_positive_definite:
+            return PointType.LOCAL_MINIMUM
+        if L_hessian_v.is_negative_definite:
+            return PointType.LOCAL_MAXIMUM
         if self.has_active_constraints(sol):
             return PointType.BOUNDARY_EXTREMUM
-        if v.is_positive_definite:
-            return PointType.LOCAL_MINIMUM
-        if v.is_negative_definite:
-            return PointType.LOCAL_MAXIMUM
-        if v.is_indefinite:
+        if L_hessian_v.is_indefinite:
             return PointType.SADDLE_POINT
         return PointType.CRITICAL_POINT
 
@@ -271,7 +309,7 @@ class KKTSolver:
         True if values is a valid solution to the optimization problem based on the KKT conditions
         """
         M = self._define_equations()
-        results = self._solve_equations(M.subs(values), self.multipliers + self.lambdas)
+        results = self._solve_matrix(M.subs(values))
         for potential_sol in results:
             sol = KKTSolution(
                 vars=values,
@@ -308,13 +346,14 @@ class KKTSolver:
             print(f"EQUALITY CONSTRAINTS: {self.constraint_equalities}")
 
         # define matrix of equations to solve
-        M = self._define_equations()
 
         min_v = float("inf")
         max_v = float("-inf")
         solutions: list[KKTSolution] = []
 
-        results = self._solve_equations(M, self.all_symbols)
+        # results = self._solve_matrix(self._define_equations())
+        results = self._solve_equations_iter()
+
         # find valid solution with KKT conditions
         for potential_sol in results:
             sol_vars, sol_lams, sol_muls = self._extract_symbol_values(potential_sol)  # pyright: ignore
@@ -323,7 +362,7 @@ class KKTSolver:
             assert len(sol_muls) == len(self.constraint_equalities)
             assert len(sol_vars) == len(self.f_symbols)
 
-            v = self.f.subs(sol_vars)
+            v = self.f.subs(sol_vars)  # pyright: ignore
 
             sol = KKTSolution(
                 vars=sol_vars, lambdas=sol_lams, multipliers=sol_muls, value=v
