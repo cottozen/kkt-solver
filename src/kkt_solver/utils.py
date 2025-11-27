@@ -12,7 +12,6 @@ def compare_dict_var(d1: dict[str, sp.Expr | float], d2: dict[str, sp.Expr | flo
     for sym_name, v in d1.items():
         v2 = d2.get(sym_name)
         if v2 is None or not compare_float(v, v2):
-            print(f"found none maching var: {sym_name} -> {v} != {v2} ")
             return False
     return True
 
