@@ -74,7 +74,7 @@ class KKTSolver:
 
         # define lambdas for inequalities
         self.lambdas: list[sp.Symbol] = [
-            sp.Symbol(f"lam_{i + 1}")
+            sp.Symbol(f"lambda_{i + 1}")
             for i, g_i in enumerate(self.constraint_inequalities)
         ]
         # define lagrangian multipliers for equalities
@@ -209,6 +209,9 @@ class KKTSolver:
                 optimals.append(sol)
                 hash_set.add(h_key)
         return optimals
+
+    def get_kkt_conditions(self):
+        return self._define_equations()
 
     def verify_constraints(self, sol: KKTSolution):
         # verify g_i constraints

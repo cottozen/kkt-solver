@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kkt-solver"
-version = "0.0.1"
+version = "0.0.3"
 description = "A hybrid analytical/numerical KKT solver for constrained optimization problems."
 readme = "README.md"
 requires-python = ">=3.10"
