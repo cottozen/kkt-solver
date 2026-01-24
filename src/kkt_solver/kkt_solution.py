@@ -2,33 +2,51 @@ import sympy as sp
 from dataclasses import dataclass, field
 import colorama
 import textwrap
-from kkt_solver import utils
+
+
+type VariableMapping = dict[str, float]
 
 
 @dataclass(frozen=True)
 class KKTSolution:
     value: sp.Expr | float
-    vars: dict[str, sp.Expr | float] = field(default_factory=dict)
-    lambdas: dict[str, sp.Expr | float] = field(default_factory=dict)
-    multipliers: dict[str, sp.Expr | float] = field(default_factory=dict)
-
-    def __hash__(self):
-        items = [
-            *sorted(self.vars.items()),
-            *sorted(self.lambdas.items()),
-            *sorted(self.multipliers.items()),
-        ]
-        return hash(tuple(items))
+    vars: VariableMapping = field(default_factory=dict)
+    lambdas: VariableMapping = field(default_factory=dict)
+    multipliers: VariableMapping = field(default_factory=dict)
 
     # equality override for checking solutions
-    def __eq__(self, value: object) -> bool:
-        if not isinstance(value, KKTSolution):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, KKTSolution):
             return False
 
+        TOLELRANCE = 1e-8
+
+        def float_compare(a, b):
+            return abs(float(a) - float(b)) < TOLELRANCE
+
+        if not float_compare(self.get_value(), other.get_value()):
+            return False
+
+        for k in self.vars:
+            if not float_compare(self.vars.get(k, 0), other.vars.get(k, 0)):
+                return False
+
+        for k in self.lambdas:
+            if not float_compare(self.lambdas.get(k, 0), other.lambdas.get(k, 0)):
+                return False
+
+        for k in self.multipliers:
+            if not float_compare(
+                self.multipliers.get(k, 0), other.multipliers.get(k, 0)
+            ):
+                return False
+
+        return True
+
+    def get_value(self):
+        # Always return numeric float
         return (
-            utils.compare_float(self.value, value.value)
-            and utils.compare_dict_var(self.vars, value.vars)
-            and utils.compare_dict_var(self.lambdas, value.lambdas)
+            float(self.value.evalf()) if isinstance(self.value, sp.Expr) else self.value
         )
 
     def display_optimal_solution(self):

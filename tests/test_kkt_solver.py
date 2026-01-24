@@ -18,7 +18,7 @@ class KKTSolverTests(unittest.TestCase):
     """
 
     def testSolve1(self):
-        x, y = sp.symbols("x, y")
+        x, y = sp.symbols("x, y", real=True)
         # ------------------
         f = 2 * x**2 + y**2
         g_1 = 2 - x - y
@@ -28,11 +28,16 @@ class KKTSolverTests(unittest.TestCase):
         expected = [
             KKTSolution(
                 vars={"x": 2 / 3, "y": 4 / 3},
-                lambdas={"lam_1": 8 / 3, "lam_2": 0, "lam_3": 0, "lam_4": 0},
+                lambdas={
+                    "lambda_1": 8 / 3,
+                    "lambda_2": 0,
+                    "lambda_3": 0,
+                    "lambda_4": 0,
+                },
                 value=8 / 3,
             )
         ]
-        solver = KKTSolver(f, [x, y], [g_1, g_2, g_3, g_4])
+        solver = KKTSolver(f, [g_1, g_2, g_3, g_4])
         optimals = solver.solve()
         self.assertEqual(optimals, expected)
         for opt in optimals:
@@ -40,7 +45,7 @@ class KKTSolverTests(unittest.TestCase):
             self.assertEqual(solver.get_point_type(opt), PointType.GLOBAL_MINIMUM)
 
     def testSolve2(self):
-        x, y = sp.symbols("x, y")
+        x, y = sp.symbols("x, y", real=True)
         # ------------------
         f = x**2 + y**2
         g_1 = 2 - x - y
@@ -51,12 +56,17 @@ class KKTSolverTests(unittest.TestCase):
         expected = [
             KKTSolution(
                 vars={"x": 1, "y": 1},
-                lambdas={"lam_1": 2, "lam_2": 0, "lam_3": 0, "lam_4": 0},
+                lambdas={
+                    "lambda_1": 2,
+                    "lambda_2": 0,
+                    "lambda_3": 0,
+                    "lambda_4": 0,
+                },
                 value=2,
             )
         ]
 
-        solver = KKTSolver(f, [x, y], [g_1, g_2, g_3, g_4])
+        solver = KKTSolver(f, [g_1, g_2, g_3, g_4])
         optimals = solver.solve()
         assert optimals == expected
         self.assertEqual(optimals, expected)
@@ -65,7 +75,7 @@ class KKTSolverTests(unittest.TestCase):
             self.assertEqual(solver.get_point_type(opt), PointType.GLOBAL_MINIMUM)
 
     def testSolve3(self):
-        x, y = sp.symbols("x, y")
+        x, y = sp.symbols("x, y", real=True)
         # ------------------
         f = x + 3 * y**2
         g_1 = x**2 + 2 * y**2 - 1
@@ -76,14 +86,14 @@ class KKTSolverTests(unittest.TestCase):
             KKTSolution(
                 vars={"x": -1 / 6, "y": -1 / 6},
                 lambdas={
-                    "lam_1": sp.Integer(0),
-                    "lam_2": sp.Integer(0),
-                    "lam_3": sp.Integer(1),
+                    "lambda_1": 0,
+                    "lambda_2": 0,
+                    "lambda_3": 1,
                 },
                 value=-1 / 12,
             )
         ]
-        solver = KKTSolver(f, [x, y], [g_1, g_2, g_3])
+        solver = KKTSolver(f, [g_1, g_2, g_3])
         optimals = solver.solve()
         self.assertEqual(optimals, expected)
         for opt in optimals:
@@ -91,7 +101,8 @@ class KKTSolverTests(unittest.TestCase):
             self.assertEqual(solver.get_point_type(opt), PointType.GLOBAL_MINIMUM)
 
     def testSolveWithEqualityContraint(self):
-        x, y, z = sp.symbols("x, y, z")
+        x, y, z = sp.symbols("x, y, z", real=True)
+
         f = 2 * x**2 + y**2 + 3 * z**2
         # inequalities contraints
         g_1 = 2 - x
@@ -104,13 +115,18 @@ class KKTSolverTests(unittest.TestCase):
         expected = [
             KKTSolution(
                 vars={"x": 5, "y": 15 / 4, "z": 5 / 4},
-                lambdas={"lam_1": 0, "lam_2": 25 / 4, "lam_3": 0, "lam_4": 0},
+                lambdas={
+                    "lambda_1": 0,
+                    "lambda_2": 25 / 4,
+                    "lambda_3": 0,
+                    "lambda_4": 0,
+                },
+                multipliers={"mul_1": -55 / 4},
                 value=275 / 4,
             )
         ]
         solver = KKTSolver(
             f,
-            [x, y, z],
             constraint_inequalities=[g_1, g_2, g_3, g_4],
             constraint_equalities=[h_1],
         )
@@ -121,29 +137,29 @@ class KKTSolverTests(unittest.TestCase):
             self.assertEqual(solver.get_point_type(opt), PointType.GLOBAL_MINIMUM)
 
     def testSolveNumeric(self):
-        x = sp.Symbol("x")
-        y = sp.Symbol("y")
+        x = sp.Symbol("x", real=True)
+        y = sp.Symbol("y", real=True)
 
         f = x**2 + y**2
-        f_symbols = [x, y]
         inequalities = [x + y - 1]
         equalities = [x - sp.cos(y)]
 
         expected = [
             KKTSolution(
-                vars={"x": 1, "y": 0},
-                lambdas={"lam_1": 0},
+                vars={"x": 1.0, "y": 0},
+                lambdas={"lambda_1": 0},
+                multipliers={"mul_1": -2},
                 value=1,
             )
         ]
         solver = KKTSolver(
             f=f,
-            f_symbols=f_symbols,
             constraint_inequalities=inequalities,
             constraint_equalities=equalities,
             verbose=False,
         )
         optimals = solver.solve()
+        self.assertEqual(len(optimals), len(expected))
         self.assertEqual(optimals, expected)
         for opt in optimals:
             self.assertTrue(solver.verify(opt.vars))
@@ -154,13 +170,11 @@ class KKTSolverTests(unittest.TestCase):
         y = sp.Symbol("y")
 
         f = x**2 + y**2
-        f_symbols = [x, y]
         inequalities = [x + y - 1]
         equalities = [x - sp.cos(y)]
 
         solver = KKTSolver(
             f=f,
-            f_symbols=f_symbols,
             constraint_inequalities=inequalities,
             constraint_equalities=equalities,
             allow_numeric=False,
@@ -180,13 +194,11 @@ class KKTSolverTests(unittest.TestCase):
         expected = [
             KKTSolution(
                 vars={"x": 1 / 3, "y": -2 / 3},
-                lambdas={"lam_1": 3 / 2, "lam_2": 0, "lam_3": 0},
+                lambdas={"lambda_1": 3 / 2, "lambda_2": 0, "lambda_3": 0},
                 value=5 / 3,
             )
         ]
-        solver = KKTSolver(
-            f, [x, y], [g_1, g_2, g_3], minimize=False, allow_numeric=False
-        )
+        solver = KKTSolver(f, [g_1, g_2, g_3], minimize=False, allow_numeric=False)
         optimals = solver.solve()
         self.assertEqual(optimals, expected)
         for opt in optimals:
@@ -197,7 +209,6 @@ class KKTSolverTests(unittest.TestCase):
         x = sp.Symbol("x")
         y = sp.Symbol("y")
         z = sp.Symbol("z")
-        f_symbols = [x, y, z]
 
         f = x**2 + y**2 + (z - 1) ** 2
 
@@ -212,20 +223,31 @@ class KKTSolverTests(unittest.TestCase):
             KKTSolution(
                 value=1,
                 vars={"x": 0, "y": 0, "z": 0},
-                lambdas={"lam_1": 0, "lam_2": 0, "lam_3": 1, "lam_4": 1, "lam_5": 0},
+                lambdas={
+                    "lambda_1": 0,
+                    "lambda_2": 0,
+                    "lambda_3": 1,
+                    "lambda_4": 1,
+                    "lambda_5": 0,
+                },
                 multipliers={},
             ),
             KKTSolution(
                 value=1,
                 vars={"x": 0, "y": 0, "z": 0},
-                lambdas={"lam_1": 1, "lam_2": 1, "lam_3": 0, "lam_4": 0, "lam_5": 0},
+                lambdas={
+                    "lambda_1": 1,
+                    "lambda_2": 1,
+                    "lambda_3": 0,
+                    "lambda_4": 0,
+                    "lambda_5": 0,
+                },
                 multipliers={},
             ),
         ]
 
         solver = KKTSolver(
             f=f,
-            f_symbols=f_symbols,
             constraint_inequalities=[g_1, g_2, g_3, g_4, g_5],
             constraint_equalities=[],
             allow_numeric=True,
@@ -240,7 +262,6 @@ class KKTSolverTests(unittest.TestCase):
         a = sp.Symbol("a")
         b = sp.Symbol("b")
         c = sp.Symbol("c")
-        f_symbols = [a, b, c]
 
         f = a**2 + b**2
 
@@ -252,14 +273,13 @@ class KKTSolverTests(unittest.TestCase):
             KKTSolution(
                 value=2,
                 vars={"a": -1, "b": -1, "c": 3},
-                lambdas={"lam_1": 2, "lam_2": 2},
+                lambdas={"lambda_1": 2, "lambda_2": 2},
                 multipliers={},
             ),
         ]
 
         solver = KKTSolver(
             f=f,
-            f_symbols=f_symbols,
             constraint_inequalities=[g_1, g_2],
             constraint_equalities=[],
             allow_numeric=True,
@@ -276,9 +296,7 @@ class KKTSolverTests(unittest.TestCase):
         f = x**2 + y**2
         g1 = 1 - x
 
-        solver = KKTSolver(
-            f=f, f_symbols=[x, y], constraint_inequalities=[g1], verbose=False
-        )
+        solver = KKTSolver(f=f, constraint_inequalities=[g1], verbose=False)
         optimals = solver.solve()
 
         self.assertTrue(len(optimals) > 0, "Should find a solution")
@@ -290,14 +308,12 @@ class KKTSolverTests(unittest.TestCase):
         self.assertEqual(point_type, PointType.GLOBAL_MINIMUM)
 
     def test_boundary_extremum_non_convex(self):
-        x = sp.Symbol("x")
+        x = sp.Symbol("x", real=True)
         f = -(x**2)
         g1 = x - 1
         g2 = -1 - x
 
-        solver = KKTSolver(
-            f=f, f_symbols=[x], constraint_inequalities=[g1, g2], verbose=False
-        )
+        solver = KKTSolver(f=f, constraint_inequalities=[g1, g2], verbose=False)
         optimals = solver.solve()
 
         self.assertTrue(len(optimals) > 0)
@@ -306,11 +322,11 @@ class KKTSolverTests(unittest.TestCase):
         self.assertEqual(point_type, PointType.LOCAL_MAXIMUM)
 
     def test_saddle_point(self):
-        x = sp.Symbol("x")
-        y = sp.Symbol("y")
+        x = sp.Symbol("x", real=True)
+        y = sp.Symbol("y", real=True)
         f = x**2 - y**2
 
-        solver = KKTSolver(f=f, f_symbols=[x, y], verbose=False)
+        solver = KKTSolver(f=f, verbose=False)
 
         mock_sol = KKTSolution(
             vars={"x": 0, "y": 0}, lambdas={}, multipliers={}, value=0
@@ -318,6 +334,30 @@ class KKTSolverTests(unittest.TestCase):
 
         point_type = solver.get_point_type(mock_sol)
         self.assertEqual(point_type, PointType.SADDLE_POINT)
+
+    def test_exponential(self):
+        x = sp.Symbol("x", real=True)
+        y = sp.Symbol("y", real=True)
+        f = sp.exp(x) + sp.exp(y)
+
+        g_1 = -x
+        g_2 = -y
+        g_3 = 1 - x - y
+
+        solver = KKTSolver(
+            f=f,
+            constraint_inequalities=[g_1, g_2, g_3],
+            verbose=False,
+        )
+        mock_sol = KKTSolution(
+            vars={"x": 1 / 2, "y": 1 / 2},
+            lambdas={"lambda_1": 0, "lambda_2": 0, "lambda_3": exp(1 / 2)},
+            multipliers={},
+            value=2 * sp.exp(1 / 2),
+        )
+        optimals = solver.solve()
+        self.assertEqual(len(optimals), 1)
+        self.assertEqual(optimals[0], mock_sol)
 
 
 if __name__ == "__main__":
