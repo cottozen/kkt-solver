@@ -136,53 +136,6 @@ class KKTSolverTests(unittest.TestCase):
             self.assertTrue(solver.verify(opt.vars))
             self.assertEqual(solver.get_point_type(opt), PointType.GLOBAL_MINIMUM)
 
-    def testSolveNumeric(self):
-        x = sp.Symbol("x", real=True)
-        y = sp.Symbol("y", real=True)
-
-        f = x**2 + y**2
-        inequalities = [x + y - 1]
-        equalities = [x - sp.cos(y)]
-
-        expected = [
-            KKTSolution(
-                vars={"x": 1.0, "y": 0},
-                lambdas={"lambda_1": 0},
-                multipliers={"mul_1": -2},
-                value=1,
-            )
-        ]
-        solver = KKTSolver(
-            f=f,
-            constraint_inequalities=inequalities,
-            constraint_equalities=equalities,
-            verbose=False,
-        )
-        optimals = solver.solve()
-        self.assertEqual(len(optimals), len(expected))
-        self.assertEqual(optimals, expected)
-        for opt in optimals:
-            self.assertTrue(solver.verify(opt.vars))
-            self.assertEqual(solver.get_point_type(opt), PointType.BOUNDARY_EXTREMUM)
-
-    def testSolveNoNumeric(self):
-        x = sp.Symbol("x")
-        y = sp.Symbol("y")
-
-        f = x**2 + y**2
-        inequalities = [x + y - 1]
-        equalities = [x - sp.cos(y)]
-
-        solver = KKTSolver(
-            f=f,
-            constraint_inequalities=inequalities,
-            constraint_equalities=equalities,
-            allow_numeric=False,
-        )
-        optimals = solver.solve()
-        assert len(optimals) == 0
-        self.assertEqual(len(optimals), 0)
-
     def testSolveMaximize(self):
         x, y = sp.symbols("x, y")
         # ------------------
@@ -198,7 +151,7 @@ class KKTSolverTests(unittest.TestCase):
                 value=5 / 3,
             )
         ]
-        solver = KKTSolver(f, [g_1, g_2, g_3], minimize=False, allow_numeric=False)
+        solver = KKTSolver(f, [g_1, g_2, g_3], minimize=False)
         optimals = solver.solve()
         self.assertEqual(optimals, expected)
         for opt in optimals:
@@ -250,7 +203,6 @@ class KKTSolverTests(unittest.TestCase):
             f=f,
             constraint_inequalities=[g_1, g_2, g_3, g_4, g_5],
             constraint_equalities=[],
-            allow_numeric=True,
             verbose=True,
             minimize=True,
         )
@@ -282,7 +234,6 @@ class KKTSolverTests(unittest.TestCase):
             f=f,
             constraint_inequalities=[g_1, g_2],
             constraint_equalities=[],
-            allow_numeric=True,
             verbose=True,
             minimize=True,
         )

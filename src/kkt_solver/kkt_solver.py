@@ -22,6 +22,11 @@ class PointType(enum.Enum):
     CRITICAL_POINT = enum.auto()
 
 
+class KKTSolverException(Exception):
+    def __init__(self, msg: str) -> None:
+        super().__init__(msg)
+
+
 class KKTSolver:
     def __init__(
         self,
@@ -29,7 +34,6 @@ class KKTSolver:
         constraint_inequalities: list[sp.Expr] | None = None,
         constraint_equalities: list[sp.Expr] | None = None,
         minimize: bool = True,
-        allow_numeric: bool = True,
         verbose: bool = True,
     ) -> None:
         """
@@ -52,15 +56,10 @@ class KKTSolver:
             Determines the goal of the optimization.
             - If True (default): optimizes min f(v)
             - If False: optimizes min -f(v)
-        allow_numeric : bool, optional
-            If True (default), the solver will attempt to use a numerical
-            root finder if the primary analytical solver fails. If False, only analytical
-            solutions are returned.
         verbose : bool, optional
 
         """
         self.minimize = minimize
-        self.allow_numeric = allow_numeric
         self.verbose = verbose
         self.f = f
         self.f_symbols = sorted(
@@ -181,15 +180,9 @@ class KKTSolver:
             # Handle the case where SymPy fails analytically
             if self.verbose:
                 print(colorama.Fore.RED + f"ANALYTICAL SOLVER FAILED: {e}")
-            if not self.allow_numeric:
-                print("Returning no solutions!")
-                return []
-
-            print(colorama.Fore.WHITE + "Trying numeric root finding (Newton method)!")
-            v0 = np.zeros(len(symbols_to_solve))
-            # try numeric solve -> there are definetly better numeric methods than sympy.nsolve :)
-            results = sp.nsolve(M.tolist(), symbols_to_solve, v0, dict=True)
-            return results
+            raise KKTSolverException(
+                "Failed to analytically solve optimization problem"
+            )
 
     def _solve_equations_iter(self):
         """
