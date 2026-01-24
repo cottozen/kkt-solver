@@ -1,10 +1,9 @@
 import itertools
 from typing import Any
 import sympy as sp
-import numpy as np
-import colorama
-from kkt_solver.kkt_solution import KKTSolution, VariableMapping
 import enum
+from kkt_solver.kkt_display import KKTDisplay
+from kkt_solver.kkt_solution import KKTSolution, VariableMapping
 
 
 def _compute_grad(f: sp.Expr, f_symbols: list[sp.Symbol]):
@@ -13,12 +12,12 @@ def _compute_grad(f: sp.Expr, f_symbols: list[sp.Symbol]):
 
 
 class PointType(enum.Enum):
-    BOUNDARY_EXTREMUM = enum.auto()
     GLOBAL_MINIMUM = enum.auto()
     GLOBAL_MAXIMUM = enum.auto()
     LOCAL_MINIMUM = enum.auto()
     LOCAL_MAXIMUM = enum.auto()
     SADDLE_POINT = enum.auto()
+    BOUNDARY_EXTREMUM = enum.auto()
     CRITICAL_POINT = enum.auto()
 
 
@@ -36,29 +35,6 @@ class KKTSolver:
         minimize: bool = True,
         verbose: bool = True,
     ) -> None:
-        """
-        Initializes the KKT Solver for constrained optimization.
-
-        This solver sets up the KKT necessary conditions using symbolic differentiation
-        (via SymPy) and prepares the system for solving.
-
-        Parameters
-        ----------
-        f : sympy.Expr
-            The objective function to be minimized, f(v).
-        constraint_inequalities : list of sympy.Expr, optional
-            A list of inequality constraint expressions, g_i(v), where the problem
-            is subject to g_i(v) <= 0. Default is None (no inequality constraints).
-        constraint_equalities : list of sympy.Expr, optional
-            A list of equality constraint expressions, h_j(v), where the problem
-            is subject to h_j(v) = 0. Default is None (no equality constraints).
-        minimize: bool, optional
-            Determines the goal of the optimization.
-            - If True (default): optimizes min f(v)
-            - If False: optimizes min -f(v)
-        verbose : bool, optional
-
-        """
         self.minimize = minimize
         self.verbose = verbose
         self.f = f
@@ -100,13 +76,9 @@ class KKTSolver:
 
         self.symbol_map = {s.name: s for s in self.all_symbols}
 
-    def _extract_symbol_values(self, potential_sol: dict[sp.Symbol, Any]):
-        """
-        extract function variables, lambdas and multipliers
-        from a potential solution returned by solver.
-        Handles missing keys by setting them to 0.
-        """
+        self.display = KKTDisplay(verbose)
 
+    def _extract_symbol_values(self, potential_sol: dict[sp.Symbol, Any]):
         substitution_map: dict = {
             sym: 0 for sym in self.all_symbols if sym not in potential_sol
         }
@@ -114,7 +86,6 @@ class KKTSolver:
         def resolve_expr_or_value(sym):
             if sym in potential_sol:
                 val = potential_sol[sym]
-                # If the value is an expression substitute the free vars
                 return val.subs(substitution_map) if hasattr(val, "subs") else val
             else:
                 return substitution_map[sym]
@@ -123,11 +94,9 @@ class KKTSolver:
             s.name: resolve_expr_or_value(s)
             for s in self.f_symbols + self.constraint_symbols
         }
-
         sol_lams: VariableMapping = {
             lam_i.name: resolve_expr_or_value(lam_i) for lam_i in self.lambdas
         }
-
         sol_muls: VariableMapping = {
             mul_i.name: resolve_expr_or_value(mul_i) for mul_i in self.multipliers
         }
@@ -135,7 +104,6 @@ class KKTSolver:
         return sol_vars, sol_lams, sol_muls
 
     def _define_lagrangian(self):
-        # if objective is minimization we optimize f(v) otherwise we optimize -f(v)
         L = self.f if self.minimize else -self.f
         if len(self.constraint_equalities) or len(self.constraint_inequalities):
             for lam_i, g_i in zip(self.lambdas, self.constraint_inequalities):
@@ -149,22 +117,38 @@ class KKTSolver:
         L_grad = _compute_grad(L, self.f_symbols + self.constraint_symbols)
         return L_grad
 
-    def _define_equations(self):
+    def construct_equations(self) -> tuple[sp.Matrix, list[str]]:
         """
-        Construct a Matrix of equations
+        Construct a Matrix of equations AND return a list of string descriptions.
         """
         equations = []
+        info_strings = []
+
         L_grad = self._define_lagrangian_grad()
         equations.append(L_grad)
 
-        # add complementary slackness equations for inequalities
-        equations += [
-            lam_i * g_i
-            for lam_i, g_i in zip(self.lambdas, self.constraint_inequalities)
-        ]
-        # add equality contraint equations:
-        equations += self.constraint_equalities
+        for i, sym in enumerate(self.f_symbols + self.constraint_symbols):
+            if i < len(L_grad):
+                info_strings.append(
+                    f"Stationarity (d L / d {sym.name}):  {L_grad[i]} = 0"
+                )
+
+        # Complementary Slackness
+        for lam_i, g_i in zip(self.lambdas, self.constraint_inequalities):
+            eq = lam_i * g_i
+            equations.append(eq)
+            info_strings.append(f"Complementary Slackness: {eq} = 0")
+
+        for h_i in self.constraint_equalities:
+            equations.append(h_i)
+            info_strings.append(f"Equality Constraint: {h_i} = 0")
+
         M = sp.Matrix(equations)
+        return M, info_strings
+
+    def get_kkt_conditions(self):
+        """Returns the matrix of equations"""
+        M, _ = self.construct_equations()
         return M
 
     def _solve_matrix(self, M: sp.Matrix):
@@ -173,13 +157,10 @@ class KKTSolver:
         )
         symbols_to_solve = [s for s in symbols_to_solve if s in M.free_symbols]
         try:
-            # Attempt the analytical solve
             results = sp.solve(M, symbols_to_solve, dict=True)
             return results
         except NotImplementedError as e:
-            # Handle the case where SymPy fails analytically
-            if self.verbose:
-                print(colorama.Fore.RED + f"ANALYTICAL SOLVER FAILED: {e}")
+            self.display.print_solver_error(e)
             raise KKTSolverException(
                 "Failed to analytically solve optimization problem"
             )
@@ -190,25 +171,37 @@ class KKTSolver:
         """
         L_grad = self._define_lagrangian_grad()
         combinations = itertools.product(*[(0, 1) for _ in self.lambdas])
-        results = []
-        for c in combinations:
+
+        all_results: list[tuple[list[str], list[Any]]] = []
+
+        for case_idx, c in enumerate(combinations):
             equations = []
             inactive_lambas = {}
+            desc_parts = []
 
-            # add equalitiy constraints
+            # Always add Equality constraints
             equations += self.constraint_equalities
-            for i, active in enumerate(c):
-                # add complementary slackness equations for active constraints
-                if active:
-                    equations.append(self.constraint_inequalities[i])
-                else:
-                    inactive_lambas[self.lambdas[i]] = 0
 
-            L_c = L_grad.subs(inactive_lambas)
-            equations.append(L_c)
+            for i, active in enumerate(c):
+                if active:
+                    # Active: g(x) = 0
+                    equations.append(self.constraint_inequalities[i])
+                    desc_parts.append(f"g{i + 1} Active")
+                else:
+                    # Inactive: lambda_i = 0
+                    inactive_lambas[self.lambdas[i]] = 0
+                    desc_parts.append(f"g{i + 1} Slack")
+
+            # Substitute inactive lambdas into gradient equations
+            equations.append(L_grad.subs(inactive_lambas))
+
+            self.display.print_case(case_idx, desc_parts)
+
             M = sp.Matrix(equations)
-            results += self._solve_matrix(M)
-        return results
+            results = (desc_parts, self._solve_matrix(M))
+            all_results.append(results)
+
+        return all_results
 
     def _sub_solutions_variables(
         self, expression: sp.Expr, *var_dicts: VariableMapping
@@ -224,40 +217,35 @@ class KKTSolver:
         self, optimal_value: sp.Expr | float, solutions: list[KKTSolution]
     ):
         optimals: list[KKTSolution] = []
-        # return optimals
         for sol in solutions:
-            if sol.value == optimal_value:
-                sol.display_optimal_solution()
+            if abs(float(sol.value) - float(optimal_value)) < 1e-6:
                 optimals.append(sol)
         return optimals
-
-    def get_kkt_conditions(self):
-        return self._define_equations()
 
     def verify_constraints(self, sol: KKTSolution):
         # verify g_i constraints
         for g_i in self.constraint_inequalities:
             g_v = self._sub_solutions_variables(g_i, sol.vars, sol.lambdas).evalf()
-            if g_v > 0:
-                return False, f"failed inequality  constraint: {g_i} with value: {g_v}"
+            if g_v > 1e-6:
+                return False, f"failed inequality constraint: {g_i} with value: {g_v}"
         for h_i in self.constraint_equalities:
             h_v = self._sub_solutions_variables(h_i, sol.vars, sol.multipliers).evalf()
-            if h_v != 0:
-                return False, f"failed equalitiy constraint: {h_i} with value: {h_v}"
+            if abs(h_v) > 1e-6:
+                return False, f"failed equality constraint: {h_i} with value: {h_v}"
         # verify lambda >= 0
         for l_i, v in sol.lambdas.items():
-            # lambda for equalities dont have to be greater than 0
-            if v < 0:
-                return False, f"failed lambda constraint: {l_i}"
+            if v < -1e-6:
+                return False, f"failed lambda constraint: {l_i} (val={v:.3f}) < 0"
         return True, "VERIFIED"
 
     def has_active_constraints(self, sol: KKTSolution):
-        # if we have equalitiy contraints then we have active contraints
         if len(self.constraint_equalities) > 0:
             return True
         for g_i in self.constraint_inequalities:
+            # We must use proper substitution map here
             g_v = self._sub_solutions_variables(g_i, sol.vars, sol.lambdas).evalf()
-            if g_v == 0:
+            # If g(x) is close to 0, it is active
+            if abs(g_v) < 1e-6:
                 return True
         return False
 
@@ -268,40 +256,31 @@ class KKTSolver:
         n = len(self.f_symbols)
         zero_matrix = sp.zeros(n, n)
 
-        # for the equalitiy constraints h(v) = 0 we need to check that they are affine
-        # meaning that h can be written as: h(v) = A.T * v + b
-        # We check that h is affine by checkking if the hessian of h is the zero matrix.
+        # simple check for convex subset where the constraints are linear and hessian matrix is 0
         eq_is_convex_subset = all(
             [
-                # compare to  zero matrix
-                sp.hessian(g_i, self.f_symbols).equals(zero_matrix)
-                for g_i in self.constraint_equalities
+                sp.hessian(h_i, self.f_symbols).equals(zero_matrix)
+                for h_i in self.constraint_equalities
             ]
         )
 
-        # for the inequality we use the fact that g(v) <= a is a convex subset if g is convex,
-        # so we check that all inequality constraints are convex and then the union will be convex
+        # Inequality constraints must be convex
         inq_is_convex_subset = all(
             [
                 sp.hessian(g_i, self.f_symbols).is_positive_semidefinite
                 for g_i in self.constraint_inequalities
             ]
         )
-        # if both subsets are convex then the unions is convex
         return eq_is_convex_subset and inq_is_convex_subset
 
     def is_convex_problem(self):
-        """
-        Checks if the function is convex and that the subset we are optimizing over is convex
-        """
+        """Checks if both function and set are convex."""
         return self.is_convex_subset() and self.is_convex_function()
 
     def get_point_type(self, sol: KKTSolution):
         """
-        Determines the point type for the provided solution
+        Determines the classification (Min, Max, Saddle) for the solution.
         """
-        assert self.verify(sol.vars), "Invalid solution, cannot get point type."
-
         if self.is_convex_problem():
             if self.minimize:
                 return PointType.GLOBAL_MINIMUM
@@ -309,115 +288,95 @@ class KKTSolver:
 
         L = self._define_lagrangian()
         L_hessian = sp.hessian(L, self.f_symbols)
-        L_hessian_v = L_hessian.subs({**sol.vars, **sol.lambdas, **sol.multipliers})
 
+        full_map = {**sol.vars, **sol.lambdas, **sol.multipliers}
+        subs_dict = {}
+        for name, val in full_map.items():
+            if name in self.symbol_map:
+                subs_dict[self.symbol_map[name]] = val
+
+        L_hessian_v = L_hessian.subs(subs_dict).evalf()
         if L_hessian_v.is_positive_definite:
             return PointType.LOCAL_MINIMUM
         if L_hessian_v.is_negative_definite:
             return PointType.LOCAL_MAXIMUM
+
         if self.has_active_constraints(sol):
             return PointType.BOUNDARY_EXTREMUM
+
         if L_hessian_v.is_indefinite:
             return PointType.SADDLE_POINT
+
         return PointType.CRITICAL_POINT
 
     def verify(self, values: VariableMapping):
-        """
-        Verifies if values is a valid optimal for the optimization problem
+        M, _ = self.construct_equations()
 
-        Parameters
-        ----------
-        values: VariableMapping
-            values of the proposed solution
-        Returns
-        True if values is a valid solution to the optimization problem based on the KKT conditions
-        """
-        M = self._define_equations()
         results = self._solve_matrix(self._sub_solutions_variables(M, values))
         for potential_sol in results:
             sol = KKTSolution(
                 vars=values,
-                lambdas={lam_i.name: potential_sol[lam_i] for lam_i in self.lambdas},  # pyright: ignore
+                lambdas={lam_i.name: potential_sol[lam_i] for lam_i in self.lambdas},
                 multipliers={
-                    mul_i.name: potential_sol[mul_i]  # pyright: ignore
-                    for mul_i in self.multipliers
+                    mul_i.name: potential_sol[mul_i] for mul_i in self.multipliers
                 },
-                value=self._sub_solutions_variables(self.f, values).evalf(),  # pyright: ignore
+                value=self._sub_solutions_variables(self.f, values).evalf(),
             )
             is_valid, error = self.verify_constraints(sol)
             if not is_valid:
-                sol.display_invalid_solution(error)
+                self.display.display_invalid_solution(sol, error)
                 return False
         return True
 
     def solve(self):
-        """
-        Solves the constrained optimization problem by finding all points that
-        satisfy the KKT conditions.
-
-        ----------
-        Returns
-        -------
-        list of KKTSolution
-            A list containing all unique, feasible KKT solutions found.
-            Each KKTSolution object represents a critical point (candidate for
-            a local minimum, local maximum, or saddle point)
-        """
-        if self.verbose:
-            print(f"SOLVING: {self.f}")
-            print(f"VARIABLES: {self.f_symbols}")
-            print(f"INEQUALITY CONSTRAINTS: {self.constraint_inequalities}")
-            print(f"EQUALITY CONSTRAINTS: {self.constraint_equalities}")
-
-        # define matrix of equations to solve
-
         min_v = float("inf")
         max_v = float("-inf")
         solutions: list[KKTSolution] = []
 
-        # results = self._solve_matrix(self._define_equations())
         results = self._solve_equations_iter()
-
         seen = set()
 
-        # find valid solution with KKT conditions
-        for potential_sol in results:
-            sol_vars, sol_lams, sol_muls = self._extract_symbol_values(potential_sol)  # pyright: ignore
+        for case_idx, (description, case_solutions) in enumerate(results):
+            self.display.print_case(case_idx, description)
+            for potential_sol in case_solutions:
+                sol_vars, sol_lams, sol_muls = self._extract_symbol_values(
+                    potential_sol
+                )  # pyright: ignore
 
-            assert len(sol_lams) == len(self.constraint_inequalities)
-            assert len(sol_muls) == len(self.constraint_equalities)
-            assert len(sol_vars) == len(self.f_symbols) + len(self.constraint_symbols)
+                v = self._sub_solutions_variables(self.f, sol_vars).evalf()
 
-            v = self._sub_solutions_variables(self.f, sol_vars).evalf()
+                sol = KKTSolution(
+                    vars={k: float(v) for k, v in sol_vars.items()},
+                    lambdas={k: float(v) for k, v in sol_lams.items()},
+                    multipliers={k: float(v) for k, v in sol_muls.items()},
+                    value=float(v),
+                )
 
-            sol = KKTSolution(
-                vars=sol_vars, lambdas=sol_lams, multipliers=sol_muls, value=v
-            )
-            is_valid, error = self.verify_constraints(sol)
-            if not is_valid:
-                if self.verbose:
-                    sol.display_invalid_solution(error)
-                continue
+                is_valid, error = self.verify_constraints(sol)
 
-            key = (
-                tuple(sorted(sol.vars.items())),
-                tuple(sorted(sol.lambdas.items())),
-                tuple(sorted(sol.multipliers.items())),
-            )
-            if key in seen:
-                continue
+                if not is_valid:
+                    if self.verbose:
+                        self.display.display_invalid_solution(sol, error)
+                    continue
 
-            seen.add(key)
-            solutions.append(sol)
-            if self.verbose:
-                sol.display_solution()
+                # Check duplicates
+                key = (
+                    tuple(sorted(sol.vars.items())),
+                    tuple(sorted(sol.lambdas.items())),
+                    tuple(sorted(sol.multipliers.items())),
+                )
+                if key in seen:
+                    continue
 
-            if v < min_v:
-                min_v = v
-            if v > max_v:
-                max_v = v
+                seen.add(key)
+                solutions.append(sol)
+                self.display.display_solution(sol)
 
-        # select min or max depending on optimization objective
+                if v < min_v:
+                    min_v = v
+                if v > max_v:
+                    max_v = v
+
         optimal_value = min_v if self.minimize else max_v
-        optimals: list[KKTSolution] = self._filter_for_optimum(optimal_value, solutions)
+        optimals = self._filter_for_optimum(optimal_value, solutions)
         return optimals

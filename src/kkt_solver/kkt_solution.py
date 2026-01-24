@@ -49,36 +49,5 @@ class KKTSolution:
             float(self.value.evalf()) if isinstance(self.value, sp.Expr) else self.value
         )
 
-    def display_optimal_solution(self):
-        print(
-            colorama.Fore.GREEN
-            + textwrap.dedent(f"""
-            OPTIMAL SOLUTION FOUND:
-            value: {self.value},
-            variables: {self.vars},
-            lambdas: {self.lambdas} 
-            """)
-        )
-
-    def display_solution(self):
-        print(
-            colorama.Fore.GREEN
-            + textwrap.dedent(f"""
-            SOLUTION FOUND:
-            value: {self.value},
-            variables: {self.vars},
-            lambdas: {self.lambdas} 
-            """)
-        )
-
-    def display_invalid_solution(self, error: str):
-        print(
-            colorama.Fore.RED
-            + textwrap.dedent(f"""
-            FAILED INEQUALITY VERIFICATION:
-            contraint: {error}
-            value: {self.value},
-            variables: {self.vars},
-            lambdas: {self.lambdas} 
-            """)
-        )
+    def __repr__(self):
+        return f"Solution(val={self.value:.4f}, vars={self.vars}, lambdas={self.lambdas}, multipliers={self.multipliers})"
